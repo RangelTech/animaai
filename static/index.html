@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anima AI: animações virais a partir de uma ideia</title>
+<meta name="description" content="Escreva a ideia em uma frase e receba uma animação pronta para Reels, TikTok e Shorts: roteiro, narração, legenda e 10 estilos visuais.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%237c5cff'/><circle cx='24' cy='26' r='6' fill='white'/><circle cx='40' cy='26' r='6' fill='white'/><path d='M20 40q12 10 24 0' stroke='white' stroke-width='5' fill='none' stroke-linecap='round'/></svg>">
+<link rel="stylesheet" href="/s/estilo.css">
+<style>
+:root{--ac:#8b6cff;--ac2:#b9a6ff}
+.estilos{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-top:32px}
+.est{border-radius:16px;padding:20px 16px;min-height:150px;display:flex;flex-direction:column;justify-content:flex-end;border:1px solid var(--bd);position:relative;overflow:hidden;transition:transform .25s}
+.est:hover{transform:translateY(-4px)}
+.est b{font-family:"Display",sans-serif;font-size:17px;position:relative}
+.est span{color:#e6e3f5;font-size:13px;position:relative;opacity:.85}
+.passos3{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:32px}
+.passo{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:24px}
+.passo .n{width:36px;height:36px;border-radius:12px;background:var(--ac);display:grid;place-items:center;font-weight:800;margin-bottom:16px}
+.hero-anima{display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:center;padding:72px 0 48px}
+.tela{background:linear-gradient(160deg,#1c1640,#0f0c22);border:1px solid #2f2860;border-radius:28px;aspect-ratio:9/16;max-width:320px;margin:0 auto;position:relative;overflow:hidden;box-shadow:0 30px 80px -30px #7c5cff55}
+.tela .cena{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:800 64px/1 "Display",sans-serif;opacity:0;animation:cena 12s infinite}
+.tela .cena:nth-child(2){animation-delay:3s}.tela .cena:nth-child(3){animation-delay:6s}.tela .cena:nth-child(4){animation-delay:9s}
+.tela .leg{position:absolute;left:16px;right:16px;bottom:72px;text-align:center;font:800 20px/1.2 "Display",sans-serif;text-shadow:0 2px 12px #000}
+.tela .arroba{position:absolute;bottom:24px;left:0;right:0;text-align:center;font-size:13px;color:#cfc6ff}
+@keyframes cena{0%,100%{opacity:0;transform:scale(1.08)}5%,22%{opacity:1;transform:scale(1)}28%{opacity:0}}
+@media (max-width:900px){.estilos{grid-template-columns:repeat(2,1fr)}.passos3{grid-template-columns:1fr}.hero-anima{grid-template-columns:1fr;padding-top:40px}}
+</style>
+</head>
+<body>
+<header class="topo"><div class="wrap">
+  <a class="marca" href="/">Anima<span> AI</span></a>
+  <nav><a class="esc" href="#como">Como funciona</a><a class="esc" href="#estilos">Estilos</a><a class="esc" href="#preco">Preço</a><a class="esc" href="#faq">Dúvidas</a><button class="btn btn-sec" data-entrar>Entrar</button></nav>
+</div></header>
+
+<main>
+<section><div class="wrap hero-anima">
+  <div>
+    <span class="selo">Diretor de IA + narração + legenda</span>
+    <h1 style="font-size:clamp(36px,5vw,54px);margin-top:16px">Escreva uma ideia.<br>Receba uma <em style="color:var(--ac);font-style:normal">animação viral</em>.</h1>
+    <p class="sub">Uma frase vira roteiro cena a cena, imagens no estilo que você escolher, narração natural, legenda palavra por palavra e o seu @ no vídeo. Pronto para Reels, TikTok e Shorts.</p>
+    <div class="acoes"><a class="btn btn-pri" href="#preco">Criar minha primeira animação</a><a class="btn btn-sec" href="#estilos">Ver os 10 estilos</a></div>
+    <div class="prova"><span><b>10 estilos</b> visuais</span><span>Até <b>90 segundos</b></span><span>Garantia de <b>7 dias</b></span></div>
+  </div>
+  <div class="tela" aria-label="Exemplo de animação">
+    <div class="cena" style="background:radial-gradient(circle at 30% 30%,#ffb547,#7c5cff)">?</div>
+    <div class="cena" style="background:radial-gradient(circle at 70% 40%,#3ddc97,#1c1640)">%</div>
+    <div class="cena" style="background:radial-gradient(circle at 40% 70%,#ff6a8f,#1c1640)">!</div>
+    <div class="cena" style="background:radial-gradient(circle at 50% 50%,#8b6cff,#0f0c22)">+</div>
+    <div class="leg">Por que o céu é azul? A resposta vai te surpreender</div>
+    <div class="arroba">@seuperfil</div>
+  </div>
+</div></section>
+
+<section id="como" style="background:var(--bg2)"><div class="wrap">
+  <div class="titulo-sec"><h2>Como funciona</h2><p>Você só escreve a ideia. O resto é com o Anima AI.</p></div>
+  <div class="passos3">
+    <div class="passo"><div class="n">1</div><h3>Conte a ideia</h3><p style="color:var(--mut)">Uma ou duas frases: o assunto, o tom e como termina. Ex.: "curiosidade sobre o céu azul, estilo canal dark, termina pedindo para seguir".</p></div>
+    <div class="passo"><div class="n">2</div><h3>O diretor monta</h3><p style="color:var(--mut)">A IA escreve o roteiro com gancho nos 2 primeiros segundos, desenha cada cena no estilo escolhido e confere se nenhuma imagem saiu com defeito.</p></div>
+    <div class="passo"><div class="n">3</div><h3>Baixe e poste</h3><p style="color:var(--mut)">Narração natural, legenda animada, o seu @ e uma versão para cada rede. Vem com legenda e hashtags para colar no post.</p></div>
+  </div>
+</div></section>
+
+<section id="estilos"><div class="wrap">
+  <div class="titulo-sec"><h2>10 estilos visuais</h2><p>Os formatos que mais crescem nos Reels hoje. Escolha um ou deixe a IA decidir pelo tema.</p></div>
+  <div class="estilos">
+    <div class="est" style="background:linear-gradient(160deg,#3a2b10,#141019)"><b>Cinematográfico</b><span>luz de cinema, profundidade</span></div>
+    <div class="est" style="background:linear-gradient(160deg,#16335c,#101423)"><b>3D animado</b><span>personagens redondinhos</span></div>
+    <div class="est" style="background:linear-gradient(160deg,#5c1a16,#1a1012)"><b>Brinquedo de montar</b><span>blocos coloridos</span></div>
+    <div class="est" style="background:linear-gradient(160deg,#1d4d2b,#0f1611)"><b>Pixel art</b><span>videogame retrô</span></div>
+    <div class="est" style="background:linear-gradient(160deg,#1f2a22,#0e1310)"><b>Quadro negro</b><span>giz e explicação</span></div>
+    <div class="est" style="background:linear-gradient(160deg,#2b2b4f,#111122)"><b>Videogame anos 2000</b><span>gráfico de PS2</span></div>
+    <div class="est" style="background:linear-gradient(160deg,#5c4a10,#18140a)"><b>Quadrinhos</b><span>balões e traço forte</span></div>
+    <div class="est" style="background:linear-gradient(160deg,#10465c,#0c1418)"><b>Vetor</b><span>ilustração limpa</span></div>
+    <div class="est" style="background:linear-gradient(160deg,#4d1659,#140c18)"><b>Neon</b><span>cores que brilham</span></div>
+    <div class="est" style="background:linear-gradient(160deg,#202024,#0a0a0c)"><b>Canal dark</b><span>mistério e suspense</span></div>
+  </div>
+</div></section>
+
+<section id="ganhos" style="background:var(--bg2)"><div class="wrap calc">
+  <div>
+    <h2>Quanto isso pode render</h2>
+    <p style="color:var(--mut)">Simulação, não promessa: depende do nicho, da frequência e de como você vende.</p>
+    <label for="c-dia">Animações postadas por dia: <b id="c-dia-v">3</b></label><input type="range" id="c-dia" min="1" max="10" value="3">
+    <label for="c-views">Visualizações médias por vídeo: <b id="c-views-v">10 mil</b></label><input type="range" id="c-views" min="1" max="100" value="10">
+    <label for="c-cli">Clientes para quem você vende animações: <b id="c-cli-v">2</b></label><input type="range" id="c-cli" min="0" max="10" value="2">
+  </div>
+  <div class="calc-res">
+    <span style="color:var(--mut)">Pode chegar a, por mês</span>
+    <div class="calc-n" id="c-mes">R$ 0</div>
+    <div class="calc-lin"><span>Monetização dos vídeos</span><b id="c-mon">R$ 0</b></div>
+    <div class="calc-lin"><span>Venda de animações para clientes</span><b id="c-vend">R$ 0</b></div>
+  </div>
+</div></section>
+
+<section id="preco"><div class="wrap">
+  <div class="titulo-sec"><span class="selo urg">Preço de lançamento até <b id="lanc-data">30/11</b></span><h2 style="margin-top:12px">Escolha seu plano</h2><p>Comece hoje. Se não gostar, a garantia de 7 dias devolve seu dinheiro.</p></div>
+  <div class="precos" id="planos"><div class="vazio">Carregando os planos…</div></div>
+</div></section>
+
+<section id="faq" style="background:var(--bg2)"><div class="wrap">
+  <div class="titulo-sec"><h2>Dúvidas</h2></div>
+  <div class="faq">
+  <details><summary>Preciso saber editar vídeo?</summary><p>Não. Você escreve a ideia e recebe o vídeo pronto, com narração, legenda e o seu @.</p></details>
+  <details><summary>Quanto tempo demora?</summary><p>Uma animação de 30 segundos costuma ficar pronta em poucos minutos. Na hora de pico pode entrar numa fila curta; o plano Turbo tem prioridade.</p></details>
+  <details><summary>Posso escolher a voz?</summary><p>Sim: voz feminina ou masculina, em português natural.</p></details>
+  <details><summary>E se eu quiser cortar vídeos meus ou de lives?</summary><p>Cortes ficam no Cortaí, nosso produto irmão: cortai.rangeltech.net.</p></details>
+  <details><summary>Posso vender as animações para clientes?</summary><p>Sim. O plano Turbo foi feito para quem cria animações para outros perfis.</p></details>
+  <details><summary>Como cancelo?</summary><p>Pela Cakto, a qualquer momento. Nos primeiros 7 dias o dinheiro volta inteiro.</p></details>
+  </div>
+</div></section>
+</main>
+
+<footer><div class="wrap"><span><span class="marca" style="font-size:16px">Anima<span> AI</span></span> · um produto Rangel Tech</span><span>contato@rangeltech.net</span></div></footer>
+
+<div class="modal" id="m-entrar" hidden role="dialog" aria-modal="true" aria-labelledby="m-tit">
+  <div class="caixa">
+    <button class="x" data-fechar aria-label="Fechar">×</button>
+  </div>
+</div>
+<script src="/s/login.js" data-conta="/api/conta" data-destino="/painel"></script>
+<script src="/s/vendas.js"></script>
+</body>
+</html>

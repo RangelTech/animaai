@@ -1,0 +1,435 @@
+"""Anima AI: site de cortes virais. API + páginas estáticas no mesmo serviço."""
+from __future__ import annotations
+
+import hashlib
+import hmac
+import json
+import logging
+import os
+import re
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+
+from app import senha_rotas
+from app import auth, fila, mailer
+from app.config import Config, carregar
+from app.db import Banco, agora
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+ESTATICO = Path(__file__).resolve().parent.parent / "static"
+COOKIE = "animaai_s"
+RE_URL = re.compile(r"^https?://[^\s]{6,500}$")
+# Planos (preço de lançamento). videos_mes = animações por mês.
+PLANOS = {
+    "start": {"nome": "Start", "preco": 19.90, "depois": 29.90, "videos_mes": 10,
+              "itens": ["10 animações por mês", "10 estilos (Lego, pixel art, quadrinhos, 3D...)", "Roteiro e narração prontos", "Legenda e o seu @ em todas"]},
+    "pro": {"nome": "Pro", "preco": 49.90, "depois": 59.90, "videos_mes": 40,
+            "itens": ["40 animações por mês", "Tudo do Start", "Vídeos de até 90 segundos", "Kit de post com legenda e hashtags"]},
+    "turbo": {"nome": "Turbo", "preco": 97.00, "depois": 127.00, "videos_mes": 150,
+              "itens": ["150 animações por mês", "Fila prioritária", "Tudo do Pro", "Para quem vende animações para outros criadores"]},
+}
+
+
+def criar_app(cfg: Config | None = None, iniciar_fila: bool = True) -> FastAPI:
+    cfg = cfg or carregar()
+    Path(cfg.dados).mkdir(parents=True, exist_ok=True)
+    db = Banco(os.path.join(cfg.dados, "animaai.db"))
+    app = FastAPI(title="Anima AI", docs_url=None, redoc_url=None, openapi_url=None)
+    app.state.cfg, app.state.db = cfg, db
+    if cfg.demo_email:  # conta de demonstração: sempre com o plano Turbo ativo
+        u = auth.usuario_por_email(db, cfg.demo_email.lower())
+        db.exec("UPDATE usuarios SET plano='turbo', ativo_ate=?, arroba=COALESCE(arroba,'animaaioficial'), redes=COALESCE(redes,'instagram,tiktok'), marca_cor=COALESCE(marca_cor,'#7c5cff') WHERE id=?",
+                (agora() + 3650 * 86400, u["id"]))
+    if iniciar_fila:
+        app.state.parar = fila.iniciar(db, cfg)
+
+    def usuario(request: Request, obrigatorio: bool = True) -> dict | None:
+        u = auth.usuario_da_sessao(db, cfg.segredo_sessao, request.cookies.get(COOKIE))
+        if not u and obrigatorio:
+            raise HTTPException(401, "entre na sua conta")
+        return u
+
+    def perfil_de(u: dict) -> dict:
+        redes = [r for r in (u.get("redes") or "").split(",") if r]
+        return {"arroba": u.get("arroba") or "", "arroba_tiktok": u.get("arroba_tiktok") or "", "redes": redes, "cor": u.get("marca_cor") or "#7c5cff"}
+
+    def resumo_conta(u: dict) -> dict:
+        assin = auth.assinante(u)
+        usados = fila.usados_no_mes(db, u["id"])
+        pl = PLANOS.get(u["plano"]) or PLANOS["pro"]
+        limite = pl["videos_mes"] if assin else cfg.trabalhos_teste
+        return {"email": u["email"], "assinante": assin, "perfil": perfil_de(u), "perfil_ok": bool((u.get("arroba") or u.get("arroba_tiktok")) and u.get("redes")), "plano": u["plano"] if assin else "teste", "ativo_ate": u["ativo_ate"],
+                "usados": usados, "limite": limite, "restam": max(0, limite - usados), "checkout": cfg.checkout_mensal, "planos": planos_publicos()}
+
+    def planos_publicos() -> list[dict]:
+        return [{"codigo": k, **v, "checkout": cfg.checkouts.get(k) or "", "lancamento_ate": cfg.lancamento_ate} for k, v in PLANOS.items()]
+
+    @app.get("/health")
+    def health():
+        return {"ok": True}
+
+    # ------------------------------------------------ login
+    @app.post("/api/entrar/codigo")
+    async def pedir_codigo(request: Request):
+        b = await request.json()
+        email = auth.normalizar_email(b.get("email"))
+        if not email:
+            raise HTTPException(422, "e-mail inválido")
+        cod, motivo = auth.novo_codigo(db, cfg.segredo_sessao, email)
+        if motivo == "espere":
+            raise HTTPException(429, "acabamos de mandar um código; espere alguns segundos")
+        enviado = mailer.codigo(cfg, email, cod)
+        out = {"ok": True, "enviado": enviado}
+        if cfg.dev:
+            out["codigo_dev"] = cod
+        return out
+
+    @app.post("/api/entrar")
+    async def entrar(request: Request):
+        b = await request.json()
+        email = auth.normalizar_email(b.get("email"))
+        if not email:
+            raise HTTPException(422, "e-mail inválido")
+        r = auth.conferir_codigo(db, cfg.segredo_sessao, email, str(b.get("codigo") or ""))
+        if r != "ok":
+            raise HTTPException(400, {"invalido": "código errado", "expirado": "código vencido; peça outro",
+                                      "tentativas": "muitas tentativas; peça outro código"}[r])
+        u = auth.usuario_por_email(db, email)
+        token = auth.criar_sessao(db, cfg.segredo_sessao, u["id"])
+        resp = JSONResponse({"ok": True, "conta": resumo_conta(u)})
+        resp.set_cookie(COOKIE, token, max_age=auth.SESSAO_S, httponly=True, secure=not cfg.dev, samesite="lax", path="/")
+        return resp
+
+
+    def _login(u: dict) -> JSONResponse:
+        token = auth.criar_sessao(db, cfg.segredo_sessao, u["id"])
+        resp = JSONResponse({"ok": True})
+        resp.set_cookie(COOKIE, token, max_age=auth.SESSAO_S, httponly=True, secure=not cfg.dev, samesite="lax", path="/")
+        return resp
+
+    senha_rotas.registrar(app, db, cfg, mailer, _login, usuario)  # senha (padrão), código (opção), esqueci a senha
+
+    @app.post("/api/sair")
+    def sair(request: Request):
+        auth.encerrar_sessao(db, cfg.segredo_sessao, request.cookies.get(COOKIE))
+        resp = JSONResponse({"ok": True})
+        resp.delete_cookie(COOKIE, path="/")
+        return resp
+
+    @app.get("/api/planos")
+    def planos():
+        return {"planos": planos_publicos()}
+
+    @app.get("/api/conta")
+    def conta(request: Request):
+        return resumo_conta(usuario(request))
+
+    # ------------------------------------------------ trabalhos
+    def publico(t: dict, cfg=cfg) -> dict:
+        res = json.loads(t["resultado"]) if t.get("resultado") else None
+        entrada = json.loads(t["entrada"])
+        apagado = bool(entrada.get("apagado"))
+        if res:
+            for c in res.get("cortes", []):
+                c["url"] = None if apagado else f"/api/trabalhos/{t['id']}/arquivo/{c['arquivo']}"
+                c["urls"] = {} if apagado else {r: f"/api/trabalhos/{t['id']}/arquivo/{a}" for r, a in (c.get("arquivos") or {}).items()}
+                c["editavel"] = bool(c.get("limpo")) and not apagado
+                c.pop("palavras", None)
+                c["capa_url"] = None if apagado or not c.get("capa") else f"/api/trabalhos/{t['id']}/arquivo/{c['capa']}"
+            if res.get("compilado"):
+                res["compilado_url"] = None if apagado else f"/api/trabalhos/{t['id']}/arquivo/{res['compilado']}"
+        return {"id": t["id"], "tipo": t["tipo"], "estado": t["estado"], "etapa": t["etapa"], "progresso": t["progresso"],
+                "entrada": {"url": entrada.get("url"), "texto": entrada.get("texto")}, "erro": t["erro"], "criado": t["criado"], "fim": t["fim"],
+                "resultado": res, "arquivos_apagados": apagado, "posicao": fila.posicao(db, t["id"]) if t["estado"] == "fila" else 0}
+
+    @app.post("/api/trabalhos")
+    async def novo(request: Request):
+        u = usuario(request)
+        b = await request.json()
+        tipo = b.get("tipo") or "animacao"
+        if tipo != "animacao":
+            raise HTTPException(422, "cortes de vídeo ficam no Cortaí (cortai.rangeltech.net); aqui é só animação")
+        url = str(b.get("url") or "").strip()
+        texto = str(b.get("texto") or "").strip()[:1500]
+        if tipo in ("cortes", "clonar") and not RE_URL.match(url):
+            raise HTTPException(422, "cole o link completo do vídeo (começando com https://)")
+        if tipo in ("animacao", "clonar") and len(texto) < 8:
+            raise HTTPException(422, "conte em uma ou duas frases o vídeo que você quer")
+        c = resumo_conta(u)
+        if not c["perfil_ok"]:
+            raise HTTPException(428, "antes da primeira animação, diga seu @ e para quais redes você vai postar")
+        if c["restam"] <= 0:
+            raise HTTPException(402, "escolha um plano para começar a criar" if not c["assinante"] else "você usou todas as animações do seu plano neste mês; suba de plano para continuar")
+        if tipo == "clonar" and c["plano"] == "start":
+            raise HTTPException(402, "clonar Reels faz parte dos planos Pro e Turbo")
+        abertos = db.um("SELECT COUNT(*) n FROM trabalhos WHERE usuario=? AND estado IN ('fila','rodando')", (u["id"],))["n"]
+        if abertos >= 2:
+            raise HTTPException(429, "espere um dos seus pedidos terminar para mandar outro")
+        if tipo == "clonar":
+            entrada = {"url": url, "texto": texto, "voz": "masculina" if b.get("voz") == "masculina" else "feminina"}
+        elif tipo == "animacao":
+            from app.ganchos import ESTILOS
+            entrada = {"texto": texto, "segundos": max(15, min(60 if c["plano"] == "start" else 90, int(b.get("segundos") or 30))), "voz": "masculina" if b.get("voz") == "masculina" else "feminina",
+                       "estilo": b.get("estilo") if b.get("estilo") in ESTILOS else None}
+        else:
+            entrada = {"url": url, "quantos": max(1, min(cfg.max_cortes, int(b.get("quantos") or 3)))}
+        pf = perfil_de(u)
+        entrada["perfil"] = {"arroba": pf["arroba"] or pf["arroba_tiktok"], "redes": pf["redes"], "cor": pf["cor"]}
+        tid = fila.criar(db, u["id"], tipo, entrada)
+        return publico(db.um("SELECT * FROM trabalhos WHERE id=?", (tid,)))
+
+    @app.post("/api/falado")
+    async def novo_falado(request: Request):
+        """Sobe o vídeo falado (corpo cru, até 400 MB) e cria o pedido. Sem multipart para não depender de biblioteca extra."""
+        raise HTTPException(404, "o vídeo falado fica no Cortaí (cortai.rangeltech.net)")
+        c = resumo_conta(u)
+        if not c["perfil_ok"]:
+            raise HTTPException(428, "antes da primeira animação, diga seu @ e para quais redes você vai postar")
+        if c["restam"] <= 0:
+            raise HTTPException(402, "escolha um plano para começar a criar" if not c["assinante"] else "você usou todas as animações do seu plano neste mês; suba de plano para continuar")
+        if db.um("SELECT COUNT(*) n FROM trabalhos WHERE usuario=? AND estado IN ('fila','rodando')", (u["id"],))["n"] >= 2:
+            raise HTTPException(429, "espere um dos seus pedidos terminar para mandar outro")
+        nome = request.headers.get("x-arquivo") or "video.mp4"
+        ext = ("." + nome.rsplit(".", 1)[-1].lower()) if "." in nome else ".mp4"
+        if ext not in (".mp4", ".mov", ".webm", ".mkv", ".m4v"):
+            raise HTTPException(422, "mande um vídeo MP4, MOV ou WEBM")
+        import uuid as _uuid
+        dest_dir = Path(cfg.dados) / "uploads"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / f"{_uuid.uuid4().hex}{ext}"
+        total = 0
+        with open(dest, "wb") as f:
+            async for parte in request.stream():
+                total += len(parte)
+                if total > 400 * 1024 * 1024:
+                    f.close(); dest.unlink(missing_ok=True)
+                    raise HTTPException(413, "o vídeo passa de 400 MB; exporte em 1080p ou menos")
+                f.write(parte)
+        if total < 10_000:
+            dest.unlink(missing_ok=True)
+            raise HTTPException(422, "o arquivo chegou vazio; tente de novo")
+        pf = perfil_de(u)
+        entrada = {"upload": str(dest), "nome": nome[:120], "perfil": {"arroba": pf["arroba"] or pf["arroba_tiktok"], "redes": pf["redes"], "cor": pf["cor"]}}
+        tid = fila.criar(db, u["id"], "falado", entrada)
+        return publico(db.um("SELECT * FROM trabalhos WHERE id=?", (tid,)))
+
+    @app.get("/api/estilos")
+    def estilos():
+        from app.ganchos import ESTILOS
+        return {"estilos": [{"codigo": k, "nome": v[0]} for k, v in ESTILOS.items()]}
+
+    @app.get("/api/biblioteca")
+    def biblioteca_lista(request: Request):
+        usuario(request)
+        from app import biblioteca
+        itens = biblioteca.listar(cfg)
+        for i in itens:
+            i["url"] = f"/api/biblioteca/{i['codigo']}.mp4"
+            i["capa_url"] = f"/api/biblioteca/{i['codigo']}.jpg"
+        return {"itens": itens, "total": len(biblioteca.TEMAS)}
+
+    @app.get("/api/biblioteca/{nome}")
+    def biblioteca_arquivo(nome: str, request: Request, baixar: int = 0):
+        usuario(request)
+        from app import biblioteca
+        if not re.fullmatch(r"[a-z]+\.(mp4|jpg)", nome):
+            raise HTTPException(404, "não encontrado")
+        p = biblioteca.pasta(cfg) / nome
+        if not p.exists():
+            raise HTTPException(404, "não encontrado")
+        return FileResponse(p, media_type="video/mp4" if nome.endswith(".mp4") else "image/jpeg", filename=f"animaai-{nome}" if baixar else None)
+
+    @app.post("/api/admin/biblioteca/gerar")
+    def biblioteca_gerar(request: Request, refazer: int = 0):
+        exigir_admin(request)
+        from app import biblioteca
+        biblioteca.gerar_em_segundo_plano(cfg, bool(refazer))
+        return {"ok": True, "ja_prontos": len(biblioteca.listar(cfg))}
+
+    @app.get("/api/perfil")
+    def perfil_get(request: Request):
+        return perfil_de(usuario(request))
+
+    @app.post("/api/perfil")
+    async def perfil_set(request: Request):
+        u = usuario(request)
+        b = await request.json()
+        limpa = lambda x: re.sub(r"[^A-Za-z0-9_.]", "", str(x or "").strip().lstrip("@"))[:30]
+        arroba, arroba_tt = limpa(b.get("arroba")), limpa(b.get("arroba_tiktok"))
+        redes = [r for r in (b.get("redes") or []) if r in ("tiktok", "instagram", "youtube")]
+        cor = str(b.get("cor") or "#7c5cff")
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", cor):
+            cor = "#7c5cff"
+        if not (arroba or arroba_tt):
+            raise HTTPException(422, "informe seu @ (Instagram ou TikTok)")
+        if not redes:
+            raise HTTPException(422, "escolha pelo menos uma rede")
+        db.exec("UPDATE usuarios SET arroba=?, arroba_tiktok=?, redes=?, marca_cor=? WHERE id=?", (arroba, arroba_tt, ",".join(redes), cor, u["id"]))
+        return perfil_de(db.um("SELECT * FROM usuarios WHERE id=?", (u["id"],)))
+
+    @app.post("/api/trabalhos/{tid}/cortes/{n}")
+    async def editar_corte(tid: str, n: int, request: Request):
+        """Edita um corte pronto a partir do corte limpo: gancho, aparar início/fim, legenda ligada/desligada, cor e @ atuais do perfil."""
+        u = usuario(request)
+        t = db.um("SELECT * FROM trabalhos WHERE id=? AND usuario=?", (tid, u["id"]))
+        if not t or t["estado"] != "pronto":
+            raise HTTPException(404, "corte não encontrado")
+        res = json.loads(t["resultado"])
+        if not (1 <= n <= len(res.get("cortes", []))):
+            raise HTTPException(404, "corte não encontrado")
+        c = res["cortes"][n - 1]
+        pasta = fila.pasta_trabalho(cfg, tid)
+        if not c.get("limpo") or not (pasta / c["limpo"]).exists():
+            raise HTTPException(409, "este corte não pode ser editado (animações, clones e cortes antigos saem prontos)")
+        b = await request.json()
+        from app import estilo
+        import subprocess
+        limpo = pasta / c["limpo"]
+        dur = estilo.duracao(limpo)
+        try:
+            a = max(0.0, float(b.get("aparar_inicio") or 0))
+            z = max(0.0, float(b.get("aparar_fim") or 0))
+        except (TypeError, ValueError):
+            raise HTTPException(422, "valores de corte inválidos")
+        if dur - a - z < 5:
+            raise HTTPException(422, "o corte ficaria curto demais (mínimo 5 segundos)")
+        fonte, palavras = limpo, c.get("palavras") or []
+        if a or z:  # apara a partir do limpo original e realinha as palavras
+            fonte = pasta / f"corte{n}_editado_limpo.mp4"
+            r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{a:.2f}", "-to", f"{dur - z:.2f}", "-i", str(limpo), "-c:v", "libx264", "-preset", "veryfast",
+                                "-crf", "22", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", str(fonte)], capture_output=True, text=True)
+            if r.returncode != 0:
+                raise HTTPException(500, "não consegui aparar o corte agora")
+            palavras = [{**w, "start": round(w["start"] - a, 2), "end": round(w["end"] - a, 2)} for w in palavras if w["end"] > a and w["start"] < dur - z]
+        gancho = str(b.get("gancho") if b.get("gancho") is not None else c.get("gancho", ""))[:60]
+        legenda = bool(b.get("legenda", True))
+        arquivos = estilo.versoes(fonte, palavras, gancho, pasta, f"corte{n}_ed", {**perfil_de(u), "arroba": perfil_de(u)["arroba"] or perfil_de(u)["arroba_tiktok"]}, legenda)
+        c.update({"arquivos": arquivos, "arquivo": next(iter(arquivos.values())), "gancho": gancho.upper(), "legenda_on": legenda,
+                  "editado": {"aparar_inicio": a, "aparar_fim": z}, "duracao": round(dur - a - z, 1)})
+        db.exec("UPDATE trabalhos SET resultado=? WHERE id=?", (json.dumps(res, ensure_ascii=False), tid))
+        return publico(db.um("SELECT * FROM trabalhos WHERE id=?", (tid,)))
+
+    @app.get("/api/trabalhos")
+    def listar(request: Request):
+        u = usuario(request)
+        return {"trabalhos": [publico(t) for t in db.todos("SELECT * FROM trabalhos WHERE usuario=? ORDER BY criado DESC LIMIT 50", (u["id"],))]}
+
+    @app.get("/api/trabalhos/{tid}")
+    def ver(tid: str, request: Request):
+        u = usuario(request)
+        t = db.um("SELECT * FROM trabalhos WHERE id=? AND usuario=?", (tid, u["id"]))
+        if not t:
+            raise HTTPException(404, "não encontrado")
+        return publico(t)
+
+    @app.get("/api/trabalhos/{tid}/arquivo/{nome}")
+    def arquivo(tid: str, nome: str, request: Request, baixar: int = 0):
+        u = usuario(request)
+        if not re.fullmatch(r"(corte\d+(_ed)?(_(limpo|tiktok|instagram|youtube))?\.(mp4|jpg)|melhores_momentos\.mp4)", nome) or not db.um("SELECT 1 FROM trabalhos WHERE id=? AND usuario=?", (tid, u["id"])):
+            raise HTTPException(404, "não encontrado")
+        p = fila.pasta_trabalho(cfg, tid) / nome
+        if not p.exists():
+            raise HTTPException(410, "esse arquivo já foi apagado (guardamos por 7 dias)")
+        mt = "video/mp4" if nome.endswith(".mp4") else "image/jpeg"
+        return FileResponse(p, media_type=mt, filename=f"animaai-{tid[:6]}-{nome}" if baixar else None)
+
+    # ------------------------------------------------ Cakto (assinatura)
+    @app.post("/api/cakto")
+    async def cakto(request: Request):
+        cru = await request.body()
+        try:
+            b = json.loads(cru)
+        except ValueError:
+            raise HTTPException(400, "json")
+        if not cfg.cakto_segredo or not hmac.compare_digest(str(b.get("secret") or ""), cfg.cakto_segredo):
+            raise HTTPException(401, "segredo")
+        evento = str(b.get("event") or "")
+        dados = b.get("data") or {}
+        if isinstance(dados, list):
+            dados = dados[0] if dados else {}
+        eid = str(dados.get("id") or hashlib.sha256(cru).hexdigest()[:24]) + ":" + evento
+        if db.um("SELECT 1 FROM eventos_cakto WHERE id=?", (eid,)):
+            return {"ok": True, "repetido": True}
+        db.exec("INSERT INTO eventos_cakto(id,recebido,corpo) VALUES(?,?,?)", (eid, agora(), cru.decode("utf-8", "replace")[:20000]))
+        email = auth.normalizar_email((dados.get("customer") or {}).get("email"))
+        if not email:
+            return {"ok": True, "ignorado": "sem email"}
+        u = auth.usuario_por_email(db, email)
+        if evento in ("purchase_approved", "subscription_renewed", "subscription_created"):
+            base = max(agora(), u["ativo_ate"])
+            plano = cfg.planos_por_produto.get(str((dados.get("product") or {}).get("id") or ""), "pro")
+            db.exec("UPDATE usuarios SET plano=?, ativo_ate=?, pedido=? WHERE id=?", (plano, base + 32 * 86400, str(dados.get("id") or ""), u["id"]))
+            return {"ok": True, "liberado": email}
+        if evento in ("refund", "chargeback", "subscription_canceled", "subscription_cancelled"):
+            db.exec("UPDATE usuarios SET ativo_ate=? WHERE id=?", (agora(), u["id"]))
+            return {"ok": True, "revogado": email}
+        return {"ok": True, "ignorado": evento}
+
+
+    # ------------------------------------------------ admin (painel do ecossistema no llm-access)
+    def exigir_admin(request: Request):
+        chave = request.headers.get("x-admin-key") or ""
+        if not cfg.admin_key or not hmac.compare_digest(chave, cfg.admin_key):
+            raise HTTPException(401, "chave de admin")
+
+    @app.post("/api/admin/cortesia")
+    async def admin_cortesia(request: Request):
+        """Libera o Anima AI para um e-mail por N dias (ponte com outros produtos: Perfilaí Turbo inclui o Anima AI Pro)."""
+        exigir_admin(request)
+        b = await request.json()
+        email = auth.normalizar_email(b.get("email"))
+        plano = b.get("plano") if b.get("plano") in PLANOS else "pro"
+        dias = max(0, min(400, int(32 if b.get("dias") is None else b.get("dias"))))
+        if not email:
+            raise HTTPException(422, "e-mail inválido")
+        u = auth.usuario_por_email(db, email)
+        ate = agora() + dias * 86400 if dias else agora()
+        db.exec("UPDATE usuarios SET plano=?, ativo_ate=MAX(ativo_ate, ?) WHERE id=?" if dias else "UPDATE usuarios SET ativo_ate=? WHERE id=?",
+                (plano, ate, u["id"]) if dias else (ate, u["id"]))
+        return {"ok": True, "email": email, "plano": plano, "ativo_ate": db.um("SELECT ativo_ate FROM usuarios WHERE id=?", (u["id"],))["ativo_ate"]}
+
+    @app.get("/api/admin/resumo")
+    def admin_resumo(request: Request):
+        exigir_admin(request)
+        ativos = db.todos("SELECT plano, COUNT(*) n FROM usuarios WHERE ativo_ate>? GROUP BY plano", (agora(),))
+        receita = sum(r["n"] * (PLANOS.get(r["plano"]) or PLANOS["pro"])["preco"] for r in ativos)
+        mes = agora() - 30 * 86400
+        return {"produto": "animaai", "nome": "Anima AI", "url": cfg.base_url,
+                "assinantes": sum(r["n"] for r in ativos), "por_plano": {r["plano"]: r["n"] for r in ativos},
+                "receita_mensal": round(receita, 2), "cadastros": db.um("SELECT COUNT(*) n FROM usuarios")["n"],
+                "pedidos_30d": db.um("SELECT COUNT(*) n FROM trabalhos WHERE criado>?", (mes,))["n"],
+                "erros_30d": db.um("SELECT COUNT(*) n FROM trabalhos WHERE criado>? AND estado='erro'", (mes,))["n"],
+                "na_fila": db.um("SELECT COUNT(*) n FROM trabalhos WHERE estado IN ('fila','rodando')")["n"],
+                "planos": planos_publicos()}
+
+    @app.get("/api/admin/assinantes")
+    def admin_assinantes(request: Request):
+        exigir_admin(request)
+        mes = agora() - 30 * 86400
+        linhas = db.todos("""SELECT u.id, u.email, u.criado, u.plano, u.ativo_ate, u.pedido,
+                                    (SELECT COUNT(*) FROM trabalhos t WHERE t.usuario=u.id AND t.criado>?) pedidos_30d,
+                                    (SELECT MAX(criado) FROM trabalhos t WHERE t.usuario=u.id) ultimo
+                             FROM usuarios u ORDER BY u.ativo_ate DESC, u.criado DESC LIMIT 1000""", (mes,))
+        for l in linhas:
+            l["ativo"] = l["ativo_ate"] > agora()
+        return {"assinantes": linhas}
+
+    # ------------------------------------------------ páginas
+    @app.get("/", response_class=HTMLResponse)
+    def inicio():
+        return FileResponse(ESTATICO / "index.html")
+
+    @app.get("/painel", response_class=HTMLResponse)
+    def painel(request: Request):
+        if not usuario(request, obrigatorio=False):
+            return RedirectResponse("/?entrar=1", status_code=303)
+        return FileResponse(ESTATICO / "painel.html")
+
+    app.mount("/s", StaticFiles(directory=ESTATICO), name="estatico")
+    return app
+
+
+app = criar_app() if os.environ.get("ANIMAAI_SEM_APP") != "1" else None
