@@ -16,7 +16,7 @@ REDES = {
     "instagram": {"nome": "Instagram", "leg_mv": 360, "gancho_mv": 165, "marca_mv": 104, "margem_d": 90, "margem_e": 40},
     "youtube": {"nome": "YouTube Shorts", "leg_mv": 380, "gancho_mv": 165, "marca_mv": 104, "margem_d": 110, "margem_e": 40},
 }
-COR_PADRAO = "#ff3d6e"
+COR_PADRAO = "#7c5cff"
 
 
 def cor_ass(hexa: str, alfa: str = "00") -> str:
