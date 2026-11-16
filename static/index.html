@@ -24,6 +24,20 @@
 .tela .leg{position:absolute;left:16px;right:16px;bottom:72px;text-align:center;font:800 20px/1.2 "Display",sans-serif;text-shadow:0 2px 12px #000}
 .tela .arroba{position:absolute;bottom:24px;left:0;right:0;text-align:center;font-size:13px;color:#cfc6ff}
 @keyframes cena{0%,100%{opacity:0;transform:scale(1.08)}5%,22%{opacity:1;transform:scale(1)}28%{opacity:0}}
+.filme{position:relative;height:520vh;background:#050506}
+.filme-fixo{position:sticky;top:0;height:100vh;overflow:hidden}
+#filme-tela{position:absolute;inset:0;width:100%;height:100%}
+.filme-veu{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,.6));pointer-events:none}
+.filme-carrega{position:absolute;left:50%;bottom:28px;transform:translateX(-50%);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--mut)}
+.ff{position:absolute;left:4vw;top:50%;width:min(calc(50vw - 26vh - 7vw),520px);transform:translateY(-50%);opacity:0;pointer-events:none}
+.ff.dir{left:auto;right:4vw;text-align:right}
+.ff small{display:block;font-size:13px;font-weight:800;letter-spacing:.3em;text-transform:uppercase;color:var(--ac2);margin-bottom:14px}
+.ff h2{font-size:clamp(32px,3.8vw,64px);line-height:1;letter-spacing:-.03em;margin:0}
+.ff p{margin-top:18px;font-size:clamp(16px,1.4vw,20px);color:#d6d3e6;line-height:1.5}
+.ff h2,.ff p,.ff small{text-shadow:0 2px 24px rgba(0,0,0,.8)}
+@media (max-aspect-ratio:1/1){.ff,.ff.dir{left:6vw;right:6vw;width:auto;top:auto;bottom:8vh;transform:none;text-align:left}
+  .ff::before{content:"";position:absolute;inset:-14vh -8vw -10vh;z-index:-1;background:linear-gradient(0deg,rgba(0,0,0,.96),rgba(0,0,0,.8) 55%,transparent)}}
+@media (prefers-reduced-motion:reduce){.filme{height:auto}.filme-fixo{position:relative}}
 .tela-real{width:100%}
 .tela-real video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .tela-real .selo-real{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:12px;font-weight:700;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);padding:5px 10px;border-radius:999px}
@@ -42,7 +56,7 @@
 <body>
 <header class="topo"><div class="wrap">
   <a class="marca" href="/">Anima<span> AI</span></a>
-  <nav><a class="esc" href="#reais">Exemplos</a><a class="esc" href="#como">Como funciona</a><a class="esc" href="#estilos">Estilos</a><a class="esc" href="#preco">Preço</a><a class="esc" href="#faq">Dúvidas</a><button class="btn btn-sec" data-entrar>Entrar</button></nav>
+  <nav><a class="esc" href="#filme">Veja nascer</a><a class="esc" href="#reais">Exemplos</a><a class="esc" href="#como">Como funciona</a><a class="esc" href="#estilos">Estilos</a><a class="esc" href="#preco">Preço</a><a class="esc" href="#faq">Dúvidas</a><button class="btn btn-sec" data-entrar>Entrar</button></nav>
 </div></header>
 
 <main>
@@ -59,6 +73,18 @@
     <span class="selo-real">Feita no Anima AI · estilo Cinematográfico</span>
   </div>
 </div></section>
+
+<section class="filme" id="filme" aria-label="Uma animação feita no Anima AI, cena a cena">
+  <div class="filme-fixo">
+    <canvas id="filme-tela"></canvas>
+    <div class="filme-veu"></div>
+    <div class="filme-carrega" id="filme-carrega">carregando 0%</div>
+    <div class="ff" data-de="0.02" data-ate="0.2"><small>Role a página</small><h2>Uma frase.</h2><p>"Os bastidores de um show sertanejo, da passagem de som ao público cantando junto." Foi só isso que o Diego escreveu.</p></div>
+    <div class="ff dir" data-de="0.26" data-ate="0.44"><small>O diretor de IA</small><h2>Vira roteiro, cena a cena.</h2><p>Gancho nos 2 primeiros segundos, ritmo de Reels e um final que pede para seguir.</p></div>
+    <div class="ff" data-de="0.5" data-ate="0.68"><small>Cada cena desenhada</small><h2>No estilo que você escolher.</h2><p>Cinematográfico, 3D, brinquedo de montar, quadrinhos... dez estilos, com o seu @ no vídeo.</p></div>
+    <div class="ff dir" data-de="0.74" data-ate="0.92"><small>Narração e legenda</small><h2>Pronta para postar.</h2><p>Voz natural em português e legenda palavra por palavra. 50 segundos, feita em minutos.</p></div>
+  </div>
+</section>
 
 <section id="reais"><div class="wrap">
   <div class="titulo-sec"><h2>Feitas com o Anima AI</h2><p>Três ideias de uma frase, três estilos. Roteiro, imagens, narração e legenda saíram sozinhos. Toque para ouvir.</p></div>
@@ -146,6 +172,56 @@
     document.querySelectorAll('.real video').forEach((o) => { o.muted = true; o.parentElement.classList.remove('som') })
     v.muted = !ligar; if (ligar) { f.classList.add('som'); v.currentTime = 0; v.play().catch(() => {}) }
   }))
+})()
+</script>
+<script>
+// rolagem quadro a quadro (skill sites-cinematograficos): a animação do Diego avança conforme a pessoa rola
+;(() => {
+  const palco = document.getElementById('filme'), tela = document.getElementById('filme-tela'), ctx = tela.getContext('2d')
+  const frases = [...palco.querySelectorAll('.ff')], deitada = () => !matchMedia('(max-aspect-ratio:1/1)').matches
+  let info = { total: 0 }, imgs = [], atual = -1, alvo = 0, visivel = false
+  const ajustar = () => { const r = Math.min(devicePixelRatio || 1, 2); tela.width = innerWidth * r; tela.height = innerHeight * r; atual = -1 }
+  function desenhar() {
+    const i = Math.round(alvo); if (i === atual) return
+    let k = i; while (k > 0 && !(imgs[k] && imgs[k].complete && imgs[k].naturalWidth)) k--
+    const im = imgs[k]; if (!im || !im.naturalWidth) return
+    atual = i
+    const W = tela.width, H = tela.height, iw = im.naturalWidth, ih = im.naturalHeight
+    if (deitada()) {  // computador: fundo desfocado ocupando tudo + o vídeo vertical inteiro no centro
+      const c = Math.max(W / iw, H / ih)
+      ctx.filter = 'blur(28px) brightness(.45)'; ctx.drawImage(im, (W - iw * c) / 2, (H - ih * c) / 2, iw * c, ih * c); ctx.filter = 'none'
+      const s = (H * 0.92) / ih, w = iw * s, h = ih * s
+      ctx.save(); ctx.beginPath(); ctx.roundRect((W - w) / 2, (H - h) / 2, w, h, 28 * (W / innerWidth)); ctx.clip()
+      ctx.drawImage(im, (W - w) / 2, (H - h) / 2, w, h); ctx.restore()
+    } else {
+      const s = Math.max(W / iw, H / ih); ctx.drawImage(im, (W - iw * s) / 2, (H - ih * s) / 2, iw * s, ih * s)
+    }
+  }
+  function aoRolar() {
+    const r = palco.getBoundingClientRect(), total = palco.offsetHeight - innerHeight
+    const p = Math.min(1, Math.max(0, -r.top / total))
+    alvo = p * Math.max(0, info.total - 1)
+    for (const f of frases) {
+      const m = Math.min(1, Math.max(0, Math.min((p - f.dataset.de) / 0.05, (f.dataset.ate - p) / 0.05)))
+      f.style.opacity = m
+      f.style.transform = deitada() ? `translateY(calc(-50% + ${(1 - m) * 26}px))` : `translateY(${(1 - m) * 26}px)`
+    }
+  }
+  const laco = () => { if (visivel) desenhar(); requestAnimationFrame(laco) }
+  async function iniciar() {
+    info = await (await fetch('/s/filme/quadros.json')).json()
+    imgs = new Array(info.total); let prontos = 0
+    const carregar = (i) => new Promise((ok) => { const im = new Image(); im.decoding = 'async'
+      im.onload = im.onerror = () => { prontos++; document.getElementById('filme-carrega').textContent = 'carregando ' + Math.round(prontos / info.total * 100) + '%'; ok() }
+      im.src = '/s/filme/' + String(i + 1).padStart(4, '0') + '.webp'; imgs[i] = im })
+    await carregar(0); ajustar(); aoRolar()
+    const ordem = []; for (const passo of [8, 4, 2, 1]) for (let i = 0; i < info.total; i += passo) if (!ordem.includes(i)) ordem.push(i)
+    for (let i = 0; i < ordem.length; i += 6) await Promise.all(ordem.slice(i, i + 6).map(carregar))
+    document.getElementById('filme-carrega').style.display = 'none'
+  }
+  // só baixa os quadros quando a seção está chegando (não pesa o primeiro carregamento)
+  new IntersectionObserver((es) => { visivel = es[0].isIntersecting; if (visivel && !info.total) iniciar() }, { rootMargin: '600px 0px' }).observe(palco)
+  addEventListener('resize', ajustar); addEventListener('scroll', aoRolar, { passive: true }); laco()
 })()
 </script>
 <script src="/s/olho.js"></script>
