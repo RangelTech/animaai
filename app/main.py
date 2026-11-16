@@ -1,4 +1,4 @@
-"""Anima AI: site de cortes virais. API + páginas estáticas no mesmo serviço."""
+"""Anima AI: animações com IA a partir de uma ideia (roteiro, cenas, narração e legenda). API + páginas no mesmo serviço."""
 from __future__ import annotations
 
 import hashlib

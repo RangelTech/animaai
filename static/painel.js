@@ -27,28 +27,28 @@
   async function carregarConta() {
     conta = await api('/api/conta')
     if (conta.assinante && !conta.perfil_ok && $('#m-perfil').hidden) abrirPerfil(true)
-    $('#cota').innerHTML = conta.assinante ? `<b>${conta.restam}</b> de ${conta.limite} vídeos neste mês` : "Sem plano ativo"
+    $('#cota').innerHTML = conta.assinante ? `<b>${conta.restam}</b> de ${conta.limite} animações neste mês` : "Sem plano ativo"
     const f = $('#aviso-assinar')
     const brl2 = (v) => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     if (!conta.assinante) {
       f.hidden = false
       f.className = 'faixa planos-faixa'
       f.innerHTML = `<div><b class="display" style="font-size:20px">Escolha seu plano para começar a criar</b><div style="color:var(--mut);font-size:14px;margin-top:4px">Preço de lançamento por tempo limitado. Pague com este mesmo e-mail (${esc(conta.email)}): o plano libera sozinho em segundos.</div></div>
-        <div class="mini-planos">${conta.planos.map((p, i) => `<a class="mp ${i === 1 ? 'dest' : ''}" href="${esc(p.checkout || '#')}" target="_blank" rel="noopener"><b>${esc(p.nome)}</b><span>${brl2(p.preco)}/mês</span><small>${p.videos_mes} vídeos</small></a>`).join('')}</div>`
+        <div class="mini-planos">${conta.planos.map((p, i) => `<a class="mp ${i === 1 ? 'dest' : ''}" href="${esc(p.checkout || '#')}" target="_blank" rel="noopener"><b>${esc(p.nome)}</b><span>${brl2(p.preco)}/mês</span><small>${p.videos_mes} animações</small></a>`).join('')}</div>`
     } else if (conta.restam <= 0) {
       f.hidden = false
       f.className = 'faixa'
-      f.innerHTML = '<span>Você usou todos os vídeos do seu plano neste mês. Suba de plano para continuar.</span>' + conta.planos.filter((p) => p.videos_mes > conta.limite).map((p) => `<a class="btn btn-pri" href="${esc(p.checkout)}" target="_blank" rel="noopener">${esc(p.nome)}: ${p.videos_mes} vídeos</a>`).join('')
+      f.innerHTML = '<span>Você usou todas as animações do seu plano neste mês. Suba de plano para continuar.</span>' + conta.planos.filter((p) => p.videos_mes > conta.limite).map((p) => `<a class="btn btn-pri" href="${esc(p.checkout)}" target="_blank" rel="noopener">${esc(p.nome)}: ${p.videos_mes} vídeos</a>`).join('')
     } else {
       f.hidden = false
       f.className = 'faixa potencial'
-      const mon = conta.limite * 3 * 10 * 1.5
-      f.innerHTML = `<span>Seu plano dá <b>${conta.limite} vídeos</b> por mês, até ${conta.limite * 3} cortes. Com 10 mil visualizações por corte, isso pode render até <b>R$ ${mon.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</b> por mês nos programas de criadores.</span>`
+      const mon = conta.limite * 10 * 1.5
+      f.innerHTML = `<span>Seu plano dá <b>${conta.limite} animações</b> por mês. Postando todas, com 10 mil visualizações cada, isso pode render até <b>R$ ${mon.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</b> por mês nos programas de criadores. Simulação, não promessa.</span>`
     }
   }
 
+  const ESTILO = { cinema: 'cinematográfico', '3d': '3D animado', lego: 'brinquedo de montar', pixel: 'pixel art', quadro: 'quadro negro', ps2: 'videogame anos 2000', hq: 'quadrinhos', vetor: 'vetorial', neon: 'neon', dark: 'canal dark' }
   function cartaoCorte(t, c, k) {
-    const nota = c.nota >= 80 ? '' : 'media'
     const tags = (c.hashtags || []).join(' ')
     const NOME = { tiktok: 'TikTok', instagram: 'Instagram', youtube: 'Shorts' }
     const redes = Object.keys(c.urls || {})
@@ -56,8 +56,7 @@
       ${c.url ? `<video src="${c.url}" ${c.capa_url ? `poster="${c.capa_url}"` : ''} controls playsinline preload="none"></video>` : '<div class="vazio" style="margin:14px">Arquivo apagado (guardamos por 7 dias)</div>'}
       ${redes.length > 1 ? `<div class="redes-tab">${redes.map((r, i) => `<button class="${i === 0 ? 'on' : ''}" data-rede-url="${c.urls[r]}">${NOME[r] || r}</button>`).join('')}</div>` : ''}
       <div class="info">
-        <div class="top"><span class="nota ${nota}" title="Potencial viral">${c.nota}</span><div><div class="tt">${esc(c.titulo)}</div><div class="mut">Corte ${k} · ${mmss(c.duracao || c.fim - c.inicio)} · do minuto ${mmss(c.inicio)}</div></div></div>
-        ${c.motivo ? `<div class="bloco"><strong>Por que pode viralizar</strong>${esc(c.motivo)}</div>` : ''}
+        <div class="top"><div><div class="tt">${esc(c.titulo)}</div><div class="mut">Animação · ${mmss(c.duracao || c.fim - c.inicio)}${t.entrada.estilo ? ' · estilo ' + esc(ESTILO[t.entrada.estilo] || t.entrada.estilo) : ''}</div></div></div>
         ${c.validacao ? `<div class="bloco conferido"><strong>Conferido pela IA${c.validacao.refeito ? ' (ajustado)' : ''}: nota ${c.validacao.nota}</strong>${c.validacao.problemas?.length ? esc(c.validacao.problemas[0]) : 'Enquadramento, legenda e início e fim conferidos.'}</div>` : ''}
         ${c.legenda ? `<div class="bloco"><strong>Legenda</strong><span>${esc(c.legenda)}</span><button class="copiar" data-copiar="${esc(c.legenda + (tags ? '\n\n' + tags : ''))}">Copiar</button></div>` : ''}
         ${tags ? `<div class="bloco"><strong>Hashtags</strong>${esc(tags)}</div>` : ''}
@@ -77,7 +76,6 @@
       corpo = `<p class="resumo" style="color:#ff9aa9">${esc(t.erro || 'Algo deu errado.')}</p>`
     } else if (r) {
       corpo = `${r.resumo ? `<p class="resumo">${esc(r.resumo)}</p>` : ''}
-        ${r.compilado_url ? `<div class="compilado"><div><b>Melhores momentos (YouTube)</b><span>Os cortes juntos no formato horizontal, para o vídeo longo do canal.</span></div><a class="btn btn-sec" href="${r.compilado_url}?baixar=1">Baixar</a></div>` : ''}
         <div class="cortes">${(r.cortes || []).map((c, i) => cartaoCorte(t, c, i + 1)).join('')}</div>
         ${r.dicas?.length ? `<div class="dicas"><b>Dicas para postar</b><ul>${r.dicas.map((d) => `<li>${esc(d)}</li>`).join('')}</ul></div>` : ''}`
     }
@@ -91,7 +89,7 @@
     try {
       const { trabalhos } = await api('/api/trabalhos')
       const el = $('#trabalhos')
-      if (!trabalhos.length) el.innerHTML = '<div class="vazio">Nenhum pedido ainda. Cole um link acima para criar os seus primeiros cortes.</div>'
+      if (!trabalhos.length) el.innerHTML = '<div class="vazio">Nenhuma animação ainda. Escreva a sua ideia acima e clique em Criar animação.</div>'
       else {
         // não redesenha cartões prontos (o vídeo tocando não pode reiniciar)
         const atuais = new Map([...el.querySelectorAll('.trab')].map((a) => [a.dataset.id, a]))
@@ -140,28 +138,10 @@
     if (a) {
       document.querySelectorAll('.aba').forEach((x) => { x.classList.toggle('on', x === a); x.setAttribute('aria-selected', x === a) })
       const qual = a.dataset.aba
-      $('#f-link').hidden = qual !== 'link'
       $('#f-texto').hidden = qual !== 'texto'
-      $('#f-clonar').hidden = qual !== 'reels'
-      $('#f-falado').hidden = qual !== 'falado'
       $('#em-breve').hidden = true
     }
   })
-  $('#f-link').onsubmit = async (e) => {
-    e.preventDefault()
-    const b = e.submitter; b.disabled = true; msg('')
-    try {
-      await api('/api/trabalhos', { method: 'POST', body: JSON.stringify({ tipo: 'cortes', url: $('#url').value.trim(), quantos: +$('#quantos').value }) })
-      $('#url').value = ''
-      msg('Pedido recebido! Acompanhe abaixo.', 'ok')
-      await carregarConta()
-      listar()
-    } catch (err) {
-      msg(err.message)
-      if (err.status === 402) carregarConta()
-      if (err.status === 428) abrirPerfil(true)
-    } finally { b.disabled = false }
-  }
   $('#f-texto').onsubmit = async (e) => {
     e.preventDefault()
     const b = e.submitter; b.disabled = true; msg('')
@@ -171,37 +151,7 @@
       msg('Pedido recebido! A animação fica pronta em poucos minutos.', 'ok')
       await carregarConta()
       listar()
-    } catch (err) { msg(err.message); if (err.status === 402) carregarConta() } finally { b.disabled = false }
-  }
-  $('#f-clonar').onsubmit = async (e) => {
-    e.preventDefault()
-    const b = e.submitter; b.disabled = true; msg('')
-    try {
-      await api('/api/trabalhos', { method: 'POST', body: JSON.stringify({ tipo: 'clonar', url: $('#url-ref').value.trim(), texto: $('#tema').value.trim(), voz: $('#voz-c').value }) })
-      $('#url-ref').value = ''; $('#tema').value = ''
-      msg('Pedido recebido! Vamos estudar o vídeo e recriar o formato com o seu tema.', 'ok')
-      await carregarConta()
-      listar()
-    } catch (err) { msg(err.message); if (err.status === 402) carregarConta() } finally { b.disabled = false }
-  }
-  $('#arq-falado').onchange = () => { const f = $('#arq-falado').files[0]; $('#arq-nome').textContent = f ? `${f.name} (${(f.size / 1048576).toFixed(0)} MB)` : 'Escolha o seu vídeo falando para a câmera' }
-  $('#f-falado').onsubmit = (e) => {
-    e.preventDefault()
-    const f = $('#arq-falado').files[0]
-    if (!f) { msg('Escolha o vídeo primeiro.'); return }
-    if (f.size > 400 * 1048576) { msg('O vídeo passa de 400 MB; exporte em 1080p ou menos.'); return }
-    const b = e.submitter; b.disabled = true; const barra = $('#barra-up'); barra.hidden = false
-    const x = new XMLHttpRequest()
-    x.open('POST', '/api/falado'); x.setRequestHeader('x-arquivo', f.name.replace(/[^\w.\-]/g, '_'))
-    x.upload.onprogress = (ev) => { if (ev.lengthComputable) barra.firstElementChild.style.width = (100 * ev.loaded / ev.total).toFixed(0) + '%' }
-    x.onload = () => {
-      b.disabled = false; barra.hidden = true
-      if (x.status >= 200 && x.status < 300) { $('#arq-falado').value = ''; $('#arq-nome').textContent = 'Escolha o seu vídeo falando para a câmera'; msg('Recebido! Está na fila.', 'ok'); listar(); carregarConta(); return }
-      let m = 'Não consegui enviar agora.'; try { m = JSON.parse(x.responseText).detail || m } catch {}
-      msg(m); if (x.status === 428) abrirPerfil(true)
-    }
-    x.onerror = () => { b.disabled = false; barra.hidden = true; msg('A conexão caiu durante o envio. Tente de novo.') }
-    x.send(f)
+    } catch (err) { msg(err.message); if (err.status === 402) carregarConta(); if (err.status === 428) abrirPerfil(true) } finally { b.disabled = false }
   }
   $('#ver-perfil').onclick = () => abrirPerfil(false)
   $('#f-perfil').onsubmit = async (e) => {

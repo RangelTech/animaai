@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Meus cortes · Anima AI</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%23ff3d6e'/><path d='M22 18l24 14-24 14z' fill='white'/></svg>">
+<title>Minhas animações · Anima AI</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%237c5cff'/><circle cx='24' cy='26' r='6' fill='white'/><circle cx='40' cy='26' r='6' fill='white'/><path d='M20 40q12 10 24 0' stroke='white' stroke-width='5' fill='none' stroke-linecap='round'/></svg>">
 <link rel="stylesheet" href="/s/estilo.css">
 <link rel="stylesheet" href="/s/painel.css">
 <style>:root{--ac:#8b6cff;--ac2:#b9a6ff}</style>
@@ -20,11 +20,6 @@
     <div class="abas" role="tablist">
       <button class="aba on" role="tab" aria-selected="true" data-aba="texto">Nova animação</button>
     </div>
-    <form id="f-link" class="form-link" hidden>
-      <input id="url" type="url" required placeholder="Cole o link do vídeo ou da live (YouTube, Instagram, TikTok… até 6 horas)" autocomplete="off">
-      <select id="quantos" aria-label="Quantos cortes"><option value="3">3 cortes</option><option value="1">1 corte</option><option value="2">2 cortes</option><option value="4">4 cortes</option><option value="5">5 cortes</option></select>
-      <button class="btn btn-pri" type="submit">Gerar cortes</button>
-    </form>
     <form id="f-texto" class="form-texto">
       <textarea id="texto" rows="3" maxlength="1500" required placeholder="Ex.: curiosidade sobre por que o céu é azul, estilo canal dark, termina pedindo para seguir"></textarea>
       <div class="linha-op">
@@ -34,27 +29,12 @@
         <button class="btn btn-pri" type="submit">Criar animação</button>
       </div>
     </form>
-    <form id="f-falado" class="form-texto" hidden>
-      <label class="soltar" for="arq-falado"><input id="arq-falado" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm,.m4v" hidden>
-        <strong id="arq-nome">Escolha o seu vídeo falando para a câmera</strong><span>MP4, MOV ou WEBM, até 10 minutos. Tiramos as pausas, pomos legenda, gancho e o seu @.</span></label>
-      <button class="btn btn-pri" type="submit">Editar meu vídeo</button>
-      <div class="barra-up" id="barra-up" hidden><i></i></div>
-    </form>
-    <form id="f-clonar" class="form-texto" hidden>
-      <input id="url-ref" type="url" required placeholder="Link do Reels, TikTok ou Shorts que você quer copiar o formato" autocomplete="off">
-      <textarea id="tema" rows="2" maxlength="1500" required placeholder="Sobre o que é o SEU vídeo? Ex.: 3 erros de quem começa a investir"></textarea>
-      <div class="linha-op">
-        <select id="voz-c" aria-label="Voz do narrador"><option value="feminina">Voz feminina</option><option value="masculina">Voz masculina</option></select>
-        <span></span>
-        <button class="btn btn-pri" type="submit">Clonar o formato</button>
-      </div>
-    </form>
     <div id="em-breve" class="em-breve" hidden>Estamos terminando esse modo. Assinantes recebem um e-mail quando ele chegar.</div>
     <div class="msg" id="msg" role="alert"></div>
   </section>
   
   <section class="lista">
-    <h2>Meus pedidos</h2>
+    <h2>Minhas animações</h2>
     <div id="trabalhos"><div class="vazio">Carregando…</div></div>
   </section>
 </main>
@@ -72,7 +52,7 @@
         <label class="ck"><input type="checkbox" value="tiktok" checked> TikTok</label>
         <label class="ck"><input type="checkbox" value="youtube"> YouTube Shorts</label>
       </div>
-      <label for="pf-cor" style="margin-top:12px">Cor da sua marca (fundo do gancho)</label><input id="pf-cor" type="color" value="#ff3d6e" class="cor">
+      <label for="pf-cor" style="margin-top:12px">Cor da sua marca (fundo do gancho)</label><input id="pf-cor" type="color" value="#8b6cff" class="cor">
       <button class="btn btn-pri" style="width:100%;margin-top:16px" type="submit">Salvar e continuar</button>
     </form>
     <div class="msg" id="mp-msg" role="alert"></div>
@@ -81,7 +61,7 @@
 <div class="modal" id="m-editar" hidden role="dialog" aria-modal="true" aria-labelledby="me-tit">
   <div class="caixa">
     <button class="x" data-fechar-m aria-label="Fechar">×</button>
-    <h3 id="me-tit">Editar corte</h3>
+    <h3 id="me-tit">Editar animação</h3>
     <p id="me-sub">Mude o gancho, apare o começo ou o fim e ligue ou desligue a legenda. O @ e a cor vêm do seu perfil.</p>
     <form id="f-editar">
       <label for="me-gancho">Gancho (texto do topo)</label><input id="me-gancho" maxlength="60">
