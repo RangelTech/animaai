@@ -1,4 +1,5 @@
 """Testes do Anima AI: login por código, cota, trabalhos, webhook da Cakto e as partes puras do pipeline."""
+from produtos_core.teste import entrar as _entrar_core
 import json
 import os
 
@@ -26,10 +27,7 @@ def assinar(c, email="ana@exemplo.com", produto="prod-start"):
 
 
 def entrar(c, email="ana@exemplo.com", perfil=True):
-    r = c.post("/api/entrar/codigo", json={"email": email})
-    assert r.status_code == 200
-    r = c.post("/api/entrar", json={"email": email, "codigo": r.json()["codigo_dev"]})
-    assert r.status_code == 200
+    r = _entrar_core(c, email)
     if perfil:
         assert c.post("/api/perfil", json={"arroba": "minhaloja", "redes": ["instagram", "tiktok"], "cor": "#22aaff"}).status_code == 200
     return r
@@ -44,24 +42,9 @@ def test_login_codigo_e_sessao(cli):
     assert [p["preco"] for p in j["planos"]] == [19.90, 49.90, 97.00] and j["planos"][0]["checkout"] == "https://pay/s"
 
 
-def test_codigo_errado_e_tentativas(cli):
-    c, _ = cli
-    c.post("/api/entrar/codigo", json={"email": "b@exemplo.com"})
-    for _ in range(5):
-        assert c.post("/api/entrar", json={"email": "b@exemplo.com", "codigo": "000000x"}).status_code == 400
-    r = c.post("/api/entrar", json={"email": "b@exemplo.com", "codigo": "123456"})
-    assert r.status_code == 400 and "tentativas" in r.json()["detail"]
-
-
-def test_reenvio_rapido_bloqueado(cli):
-    c, _ = cli
-    assert c.post("/api/entrar/codigo", json={"email": "c@exemplo.com"}).status_code == 200
-    assert c.post("/api/entrar/codigo", json={"email": "c@exemplo.com"}).status_code == 429
-
-
 def test_email_invalido(cli):
     c, _ = cli
-    assert c.post("/api/entrar/codigo", json={"email": "nao-e-email"}).status_code == 422
+    assert c.post("/api/cadastro", json={"email": "nao-e-email", "senha": "senha-boa-1"}).status_code == 422
 
 
 def test_sem_plano_nao_cria_e_start_libera(cli):
@@ -357,48 +340,47 @@ def test_sem_rosto_usa_layout_antigo(tmp_path):
 
 
 # ---------------------------------------------------------------- senha (padrão), código (opção), esqueci a senha
+
+
 def test_senha_criar_entrar_trocar_e_esqueci(cli):
     from fastapi.testclient import TestClient
-    c, _ = cli
+    c = cli[0]
     app = c.app
     em = "senha@exemplo.com"
-    entrar(c, em)
-    assert c.get("/api/senha").json()["tem_senha"] is False
-    assert c.post("/api/senha", json={"senha": "curta"}).status_code == 422
-    assert c.post("/api/senha", json={"senha": "boa-senha-1"}).status_code == 200
+    assert c.post("/api/cadastro", json={"email": em, "senha": "curta"}).status_code == 422
+    assert c.post("/api/cadastro", json={"email": em, "senha": "boa-senha-1"}).status_code == 200
     assert c.get("/api/senha").json()["tem_senha"] is True
+    assert c.post("/api/cadastro", json={"email": em, "senha": "outra-coisa"}).status_code == 409
     # trocar exige a atual
     assert c.post("/api/senha", json={"senha": "outra-senha", "atual": "errada"}).status_code == 400
     assert c.post("/api/senha", json={"senha": "outra-senha", "atual": "boa-senha-1"}).status_code == 200
-    # entrar com senha num cliente novo (sem cookie)
     n = TestClient(app)
     assert n.post("/api/entrar/senha", json={"email": em, "senha": "boa-senha-1"}).status_code == 400
-    r = n.post("/api/entrar/senha", json={"email": em, "senha": "outra-senha"})
-    assert r.status_code == 200 and n.get("/api/senha").status_code == 200
-    # conta sem senha recebe dica de usar o código
-    entrar(TestClient(app), "semsenha@exemplo.com")
-    r = TestClient(app).post("/api/entrar/senha", json={"email": "semsenha@exemplo.com", "senha": "qualquer1"})
-    assert r.status_code == 400 and "código" in r.json()["detail"]
-    # esqueci a senha: código separado do login, troca a senha e já entra
+    assert n.post("/api/entrar/senha", json={"email": em, "senha": "outra-senha"}).status_code == 200
+    # esqueci a senha: link por e-mail (uso único), troca a senha e já entra
     e = TestClient(app)
-    j = e.post("/api/senha/esqueci", json={"email": em}).json()
-    assert e.post("/api/senha/redefinir", json={"email": em, "codigo": "000000" if j["codigo_dev"] != "000000" else "111111", "senha": "nova-senha-9"}).status_code == 400
-    j = None
-    import app.auth as A
-    A.REENVIO_MIN_S = 0
-    j = e.post("/api/senha/esqueci", json={"email": em}).json()
-    assert e.post("/api/senha/redefinir", json={"email": em, "codigo": j["codigo_dev"], "senha": "nova-senha-9"}).status_code == 200
+    t = e.post("/api/senha/esqueci", json={"email": em}).json()["token_dev"]
+    assert e.post("/api/senha/redefinir", json={"token": t + "x", "senha": "nova-senha-9"}).status_code == 400
+    assert e.post("/api/senha/redefinir", json={"token": t, "senha": "nova-senha-9"}).status_code == 200
+    assert e.post("/api/senha/redefinir", json={"token": t, "senha": "outra-de-novo"}).status_code == 400
     assert e.get("/api/senha").json()["tem_senha"] is True
     assert TestClient(app).post("/api/entrar/senha", json={"email": em, "senha": "nova-senha-9"}).status_code == 200
-    # e-mail sem conta: mesma resposta, sem código
-    assert "codigo_dev" not in e.post("/api/senha/esqueci", json={"email": "ninguem@exemplo.com"}).json()
+    # e-mail sem conta: mesma resposta, sem link
+    r = e.post("/api/senha/esqueci", json={"email": "ninguem@exemplo.com"}).json()
+    assert r["ok"] and "token_dev" not in r
+    # entrar por link: um clique e entra; link usado de novo é recusado
+    lk = TestClient(app).post("/api/entrar/link", json={"email": em}).json()["link_dev"]
+    caminho = "/" + lk.split("/", 3)[3]
+    x = TestClient(app)
+    assert x.get(caminho, follow_redirects=False).status_code == 303 and x.get("/api/senha").status_code == 200
+    assert "invalido" in TestClient(app).get(caminho, follow_redirects=False).headers["location"]
+    # o login por código saiu
+    assert e.post("/api/entrar/codigo", json={"email": em}).status_code != 200
 
 
 def test_senha_bloqueia_depois_de_muitos_erros(cli):
-    from app import senha_rotas
-    c, _ = cli
-    senha_rotas._erros.clear()
-    for _ in range(senha_rotas.MAX_ERROS):
-        c.post("/api/entrar/senha", json={"email": "forca@exemplo.com", "senha": "x"})
-    assert c.post("/api/entrar/senha", json={"email": "forca@exemplo.com", "senha": "x"}).status_code == 429
-    senha_rotas._erros.clear()
+    c = cli[0]
+    c.post("/api/cadastro", json={"email": "forca@exemplo.com", "senha": "senha-certa-1"})
+    for _ in range(5):
+        assert c.post("/api/entrar/senha", json={"email": "forca@exemplo.com", "senha": "x"}).status_code == 400
+    assert c.post("/api/entrar/senha", json={"email": "forca@exemplo.com", "senha": "senha-certa-1"}).status_code == 429
